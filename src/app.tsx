@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Users, Truck, Clock, Wrench, Package, RotateCcw, Move, Lock, Unlock, Key } from 'lucide-react';
 
 const TechnicianAssignmentTool = () => {
@@ -305,7 +305,7 @@ const TechnicianAssignmentTool = () => {
                       >
                         {foreman.technicians.length > 0 ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {foreman.technicians.map((technician: any, techIndex: number) => (
+                            {foreman.technicians.map((technician: any) => (
                               <div
                                 key={technician.id}
                                 className={`bg-gray-100 border border-gray-300 p-2 rounded transition-all ${
