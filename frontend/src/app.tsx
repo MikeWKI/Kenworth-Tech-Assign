@@ -1,145 +1,99 @@
-import { useState } from 'react';
-import { Users, Truck, Clock, Wrench, Package, RotateCcw, Move, Lock, Unlock, Key } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, Truck, Clock, Wrench, Package, RotateCcw, Move, Lock, Unlock, Key, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+interface Technician {
+  id: string;
+  name: string;
+  notes?: string;
+}
+
+interface Foreman {
+  id: string;
+  name: string;
+  technicians: Technician[];
+}
+
+interface Department {
+  foremen: Foreman[];
+}
+
+interface Assignments {
+  [departmentName: string]: Department;
+}
+
+interface DraggedItem {
+  technician: Technician;
+  foremanIndex: number;
+}
 
 const TechnicianAssignmentTool = () => {
-  // Updated data structure with foremen and their assigned technicians
-  const [assignments, setAssignments] = useState({
-    "1st Shift": {
-      foremen: [
-        {
-          name: "Shane Doty",
-          id: "186",
-          technicians: [
-            { name: "Phil Cummins", id: "101", notes: "" },
-            { name: "Laryssa Jones", id: "159", notes: "" },
-            { name: "Tim Kelley", id: "173", notes: "" },
-            { name: "Luke Border", id: "751", notes: "" },
-            { name: "Noah Ryan", id: "156", notes: "" },
-            { name: "Trent Weatherington", id: "735", notes: "ND" }
-          ]
-        },
-        {
-          name: "Tyler Merriman",
-          id: "782",
-          technicians: [
-            { name: "Benjamin Cooke", id: "140", notes: "ND" },
-            { name: "Devin Stilwell", id: "195", notes: "" },
-            { name: "Bailey Hughes", id: "180", notes: "" },
-            { name: "Donny Bell", id: "125", notes: "" }
-          ]
-        },
-        {
-          name: "Dustin Russell",
-          id: "780",
-          technicians: [
-            { name: "Will Parrish", id: "168", notes: "" },
-            { name: "Kyler Moody", id: "706", notes: "" },
-            { name: "Remington Nold", id: "754", notes: "ND" },
-            { name: "Manny Ponce", id: "272", notes: "" },
-            { name: "Shawn Schmidt", id: "103", notes: "" }
-          ]
-        }
-      ]
-    },
-    "2nd Shift": {
-      foremen: [
-        {
-          name: "Danny Cross",
-          id: "",
-          technicians: [
-            { name: "Steve Jostock", id: "148", notes: "" },
-            { name: "Jim Carroll", id: "171", notes: "" },
-            { name: "Mark Haehn", id: "189", notes: "" },
-            { name: "Perry Krout", id: "155", notes: "" }
-          ]
-        }
-      ]
-    },
-    "Field Service": {
-      foremen: [
-        {
-          name: "Chris Valyo",
-          id: "9133",
-          technicians: [
-            { name: "Austin Beye", id: "9161", notes: "ST1" },
-            { name: "Brian Johnson", id: "9111", notes: "ST7" }
-          ]
-        }
-      ]
-    },
-    "Body Shop": {
-      foremen: [
-        {
-          name: "Devin Kahle",
-          id: "151",
-          technicians: [
-            { name: "Ray Archer", id: "102", notes: "" },
-            { name: "Colin Stanley", id: "172", notes: "" },
-            { name: "Danny Marr", id: "190", notes: "" },
-            { name: "Ricky Tetreault", id: "103", notes: "" },
-            { name: "Austin Palmer", id: "716", notes: "" },
-            { name: "Rick Parker", id: "179", notes: "" },
-            { name: "Drew Stanley", id: "198", notes: "" },
-            { name: "Josh Adair", id: "702", notes: "" }
-          ]
-        }
-      ]
-    },
-    "PacLease": {
-      foremen: [
-        {
-          name: "William Callison",
-          id: "709",
-          technicians: [
-            { name: "Cayden Brandt", id: "127", notes: "" },
-            { name: "Federico Lopez", id: "142", notes: "" },
-            { name: "Logan Curless", id: "711", notes: "" },
-            { name: "Owen Tingley", id: "713", notes: "" },
-            { name: "Noe Fuentes", id: "759", notes: "" },
-            { name: "Gabe Adams", id: "764", notes: "" }
-          ]
-        }
-      ]
-    },
-    "Recon": {
-      foremen: [
-        {
-          name: "Chris Schreiner",
-          id: "756",
-          technicians: [
-            { name: "Devyn Thomas", id: "753", notes: "" },
-            { name: "James Drake", id: "752", notes: "" },
-            { name: "Kimble Thompson", id: "761", notes: "" },
-            { name: "Michael Miller", id: "762", notes: "" },
-            { name: "Aiden Adams", id: "765", notes: "" }
-          ]
-        }
-      ]
-    }
-  });
-
-  const [draggedItem, setDraggedItem] = useState<{
-    technician: any;
-    foremanIndex: number;
-  } | null>(null);
+  const [assignments, setAssignments] = useState<Assignments>({});
+  const [draggedItem, setDraggedItem] = useState<DraggedItem | null>(null);
   const [draggedFrom, setDraggedFrom] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(true);
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const correctPin = '1971';
+  // Load assignments from backend
+  const loadAssignments = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_URL}/api/assignments`);
+      if (response.ok) {
+        const data = await response.json();
+        setAssignments(data);
+        setLastUpdated(new Date());
+        setIsOnline(true);
+      } else {
+        throw new Error('Failed to load assignments');
+      }
+    } catch (error) {
+      console.error('Error loading assignments:', error);
+      setIsOnline(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handlePinSubmit = () => {
-    if (pinInput === correctPin) {
-      setIsLocked(false);
-      setShowPinModal(false);
-      setPinInput('');
-      setPinError(false);
-    } else {
+  // Initial load
+  useEffect(() => {
+    loadAssignments();
+    
+    // Auto-refresh every 30 seconds to sync with other users
+    const interval = setInterval(loadAssignments, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handlePinSubmit = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/verify-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinInput })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setIsLocked(false);
+        setShowPinModal(false);
+        setPinInput('');
+        setPinError(false);
+      } else {
+        setPinError(true);
+        setPinInput('');
+        setTimeout(() => setPinError(false), 2000);
+      }
+    } catch (error) {
+      console.error('PIN verification failed:', error);
       setPinError(true);
-      setPinInput('');
-      setTimeout(() => setPinError(false), 2000);
     }
   };
 
@@ -149,7 +103,7 @@ const TechnicianAssignmentTool = () => {
     setDraggedFrom(null);
   };
 
-  const handleDragStart = (e: any, technician: any, departmentName: string, foremanIndex: number) => {
+  const handleDragStart = (e: React.DragEvent, technician: Technician, departmentName: string, foremanIndex: number) => {
     if (isLocked) {
       e.preventDefault();
       return;
@@ -159,44 +113,75 @@ const TechnicianAssignmentTool = () => {
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDragOver = (e: any) => {
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = (e: any, targetDepartment: string, targetForemanIndex: number) => {
+  const handleDrop = async (e: React.DragEvent, targetDepartment: string, targetForemanIndex: number) => {
     e.preventDefault();
     
     if (isLocked || !draggedItem || !draggedFrom) {
       return;
     }
 
+    const targetForeman = assignments[targetDepartment]?.foremen[targetForemanIndex];
+    if (!targetForeman) return;
+
     // Don't allow drop on same location
-    if (targetDepartment === draggedFrom && targetForemanIndex === (draggedItem as any).foremanIndex) {
+    if (targetDepartment === draggedFrom && targetForemanIndex === draggedItem.foremanIndex) {
       setDraggedItem(null);
       setDraggedFrom(null);
       return;
     }
 
-    setAssignments(prev => {
-      const newAssignments = { ...prev };
+    try {
+      setSaving(true);
       
-      // Remove from source
-      (newAssignments as any)[draggedFrom].foremen[(draggedItem as any).foremanIndex].technicians = 
-        (newAssignments as any)[draggedFrom].foremen[(draggedItem as any).foremanIndex].technicians.filter(
-          (tech: any) => tech.id !== (draggedItem as any).technician.id
-        );
-      
-      // Add to target
-      (newAssignments as any)[targetDepartment].foremen[targetForemanIndex].technicians.push(
-        (draggedItem as any).technician
-      );
-      
-      return newAssignments;
-    });
+        // Save to backend
+        const response = await fetch(`${API_URL}/api/move-technician`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            technicianId: draggedItem.technician.id,
+            newDepartment: targetDepartment,
+            newForemanName: targetForeman.name,
+            newForemanId: targetForeman.id
+          })
+        });
 
-    setDraggedItem(null);
-    setDraggedFrom(null);
+        if (response.ok) {
+          // Update local state immediately for better UX
+          setAssignments(prev => {
+            const newAssignments = { ...prev };
+            
+            // Remove from source
+            newAssignments[draggedFrom].foremen[draggedItem.foremanIndex].technicians = 
+              newAssignments[draggedFrom].foremen[draggedItem.foremanIndex].technicians.filter(
+                (tech: Technician) => tech.id !== draggedItem.technician.id
+              );
+            
+            // Add to target
+            newAssignments[targetDepartment].foremen[targetForemanIndex].technicians.push(
+              draggedItem.technician
+            );
+            
+            return newAssignments;
+          });        setIsOnline(true);
+        setLastUpdated(new Date());
+      } else {
+        throw new Error('Failed to save assignment');
+      }
+    } catch (error) {
+      console.error('Error saving assignment:', error);
+      setIsOnline(false);
+      // Reload to get current state
+      loadAssignments();
+    } finally {
+      setSaving(false);
+      setDraggedItem(null);
+      setDraggedFrom(null);
+    }
   };
 
   const getDepartmentIcon = (departmentName: string) => {
@@ -207,9 +192,20 @@ const TechnicianAssignmentTool = () => {
     return <Clock className="w-5 h-5" />;
   };
 
-  const getTotalTechnicians = (department: any) => {
-    return department.foremen.reduce((total: number, foreman: any) => total + foreman.technicians.length, 0);
+  const getTotalTechnicians = (department: Department) => {
+    return department.foremen?.reduce((total: number, foreman: Foreman) => total + foreman.technicians.length, 0) || 0;
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="w-8 h-8 animate-spin text-red-700 mx-auto mb-4" />
+          <p className="text-gray-600">Loading Kenworth assignments...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
@@ -225,8 +221,15 @@ const TechnicianAssignmentTool = () => {
               </div>
             </div>
             
-            {/* Lock Controls */}
+            {/* Status and Controls */}
             <div className="flex items-center gap-3">
+              {/* Online Status */}
+              <div className={`flex items-center gap-2 px-2 py-1 rounded text-xs ${isOnline ? 'bg-green-600' : 'bg-red-800'}`}>
+                {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                {isOnline ? 'ONLINE' : 'OFFLINE'}
+              </div>
+              
+              {/* Lock Status */}
               <div className={`flex items-center gap-2 px-3 py-2 rounded ${isLocked ? 'bg-red-600' : 'bg-green-600'}`}>
                 {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                 <span className="text-sm font-medium">
@@ -234,6 +237,17 @@ const TechnicianAssignmentTool = () => {
                 </span>
               </div>
               
+              {/* Refresh Button */}
+              <button
+                onClick={loadAssignments}
+                disabled={loading}
+                className="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded flex items-center gap-2 transition-colors text-sm"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Sync
+              </button>
+              
+              {/* Lock/Unlock Button */}
               {isLocked ? (
                 <button
                   onClick={() => setShowPinModal(true)}
@@ -253,6 +267,14 @@ const TechnicianAssignmentTool = () => {
               )}
             </div>
           </div>
+          
+          {/* Last Updated */}
+          {lastUpdated && (
+            <div className="mt-2 text-red-200 text-xs">
+              Last updated: {lastUpdated.toLocaleTimeString()}
+              {saving && <span className="ml-2 text-yellow-300">Saving...</span>}
+            </div>
+          )}
         </div>
 
         {/* Main Content */}
@@ -275,7 +297,7 @@ const TechnicianAssignmentTool = () => {
 
                 {/* Foremen and their teams */}
                 <div className="space-y-4">
-                  {departmentData.foremen.map((foreman: any, foremanIndex: number) => (
+                  {(departmentData as any).foremen?.map((foreman: any, foremanIndex: number) => (
                     <div key={foremanIndex} className="bg-white rounded-lg border border-gray-300 overflow-hidden">
                       {/* Foreman Header */}
                       <div className="bg-yellow-500 text-white p-3">
@@ -356,12 +378,15 @@ const TechnicianAssignmentTool = () => {
           <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-red-800 mb-2">Instructions</h3>
             <p className="text-red-700 mb-2">
-              <strong>Security:</strong> The system starts in LOCKED mode. Click "Unlock" and enter the PIN to enable editing.
+              <strong>Database Sync:</strong> Changes are automatically saved to the database and shared with all users. 
+              The system syncs every 30 seconds or click "Sync" for immediate updates.
+            </p>
+            <p className="text-red-700 mb-2">
+              <strong>Security:</strong> Click "Unlock" and enter PIN 1971 to enable editing.
             </p>
             <p className="text-red-700">
-              <strong>Editing:</strong> When unlocked, drag and drop technicians between foremen to reassign them. 
-              Each technician card shows their name, ID number, and special notes. 
-              Click "Lock" to secure the system when finished editing.
+              <strong>Editing:</strong> When unlocked, drag and drop technicians between foremen. 
+              Changes are saved immediately and visible to all users.
             </p>
           </div>
 
@@ -375,7 +400,7 @@ const TechnicianAssignmentTool = () => {
                     {getTotalTechnicians(departmentData)}
                   </div>
                   <div className="text-xs text-gray-300">
-                    Technicians | {departmentData.foremen.length} Foremen
+                    Technicians | {(departmentData as any).foremen?.length || 0} Foremen
                   </div>
                 </div>
               </div>
